@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RePlay Labs | Behavioral Operating System</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        void: '#050505',
+                        panel: '#080808',
+                        brandTeal: '#2dd4bf',
+                        brandPurple: '#8b5cf6',
+                        alert: '#ef4444',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    backgroundImage: {
+                        'grid-pattern': "linear-gradient(to right, #222 1px, transparent 1px), linear-gradient(to bottom, #222 1px, transparent 1px)",
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+
+    <style>
+        body {
+            background-color: #050505;
+            color: #e5e5e5;
+            overflow-x: hidden;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #080808; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2dd4bf; 
+        }
+        .noise-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        .grid-bg {
+            background-size: 40px 40px;
+            mask-image: linear-gradient(to bottom, transparent, 10% black, 90% black, transparent);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        // --- Icons (Inline SVG for reliability) ---
+        const Icon = ({ name, className = "w-6 h-6" }) => {
+            const icons = {
+                target: <><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><circle cx="12" cy="12" r="3"/></>,
+                layout: <><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></>,
+                alert: <><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+                zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
+                users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+                cpu: <><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></>,
+                barChart: <><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></>,
+                check: <polyline points="20 6 9 17 4 12"/>,
+                menu: <><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></>,
+                x: <><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></>,
+                // New Icons for Navigation Matrix
+                home: <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>,
+                activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
+                building: <><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="22" x2="9" y2="22"/><line x1="15" y1="22" x2="15" y2="22"/><line x1="12" y1="22" x2="12" y2="22"/><line x1="12" y1="2" x2="12" y2="22"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="4" y1="14" x2="20" y2="14"/><line x1="4" y1="18" x2="20" y2="18"/></>,
+                smartphone: <><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></>,
+                layers: <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>,
+                trendingUp: <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name] || icons.cpu}
+                </svg>
+            );
+        };
+
+        // --- Data ---
+        const SECTIONS = [
+            { id: '00_MTP', label: '00_MTP', icon: 'cpu' },
+            { id: '00_HOME', label: '00_HOME', icon: 'home' },
+            { id: '01_DIAGNOSTIC', label: '01_DIAGNOSTIC', icon: 'activity' },
+            { id: '02_DIRECTIVE', label: '02_DIRECTIVE', icon: 'target' },
+            { id: '03_ENTERPRISE', label: '03_ENTERPRISE', icon: 'building' },
+            { id: '04_GIG', label: '04_GIG_ECONOMY', icon: 'smartphone' },
+            { id: '05_ARCH', label: '05_ARCHITECTURE', icon: 'layers' },
+            { id: '06_TRACTION', label: '06_TRACTION', icon: 'trendingUp' },
+            { id: '07_TEAM', label: '07_TEAM', icon: 'users' },
+        ];
+
+        // --- Reusable UI Components ---
+        const SectionTitle = ({ number, title, subtitle, color = "text-white" }) => (
+            <div className="mb-8 border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3 font-mono text-xs opacity-50 mb-2">
+                    <span className={`w-2 h-2 ${color} bg-current rounded-full animate-pulse`}></span>
+                    <span>SYS.MOD.{number}</span>
+                </div>
+                <h2 className="text-4xl md:text-6xl font-bold uppercase tracking-tight leading-none mb-2">
+                    {title}
+                </h2>
+                <p className={`font-mono text-sm md:text-base ${color} opacity-80`}>
+                    // {subtitle}
+                </p>
+            </div>
+        );
+
+        const Card = ({ children, className = "" }) => (
+            <div className={`border border-white/10 bg-white/5 backdrop-blur-sm p-6 md:p-8 ${className}`}>
+                {children}
+            </div>
+        );
+
+        // --- Screen Components ---
+
+        const ScreenMTP = ({ onEnter }) => (
+            <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, y: -50 }}
+                onClick={onEnter}
+                className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-void cursor-pointer selection:bg-brandTeal selection:text-black"
+            >
+                <div className="absolute top-8 right-8 border border-white/20 px-3 py-1 font-mono text-xs text-brandTeal bg-brandTeal/10 rounded-full">
+                    VALUATION: PRE-SEED
+                </div>
+                
+                <div className="max-w-3xl px-6 text-center">
+                    <motion.h1 
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ delay: 0.2, duration: 0.8 }}
+                        className="text-4xl md:text-7xl font-bold leading-tight mb-8"
+                    >
+                        BECOME THE BEHAVIORAL OS THAT MAKES WORK <span className="text-transparent bg-clip-text bg-gradient-to-r from-brandTeal to-brandPurple">TEACH HUMANS HOW TO WIN.</span>
+                    </motion.h1>
+                    
+                    <motion.p 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 1 }}
+                        className="font-mono text-xs md:text-sm text-gray-500 animate-pulse"
+                    >
+                        [ CLICK TO INITIALIZE SYSTEM ]
+                    </motion.p>
+                </div>
+            </motion.div>
+        );
+
+        const ScreenHome = () => (
+            <div className="h-full flex flex-col md:flex-row relative font-sans">
+                
+                {/* Top Left Label - Absolute */}
+                <div className="absolute top-8 left-8 z-30 font-mono text-xs text-gray-500 tracking-widest">
+                    [ REPLAY LABS ]
+                </div>
+
+                {/* Center Title Overlay */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none md:block hidden">
+                     <h2 className="text-xs font-mono uppercase tracking-[0.5em] text-white/50 bg-void px-4 py-2 border border-white/10">Opportunity</h2>
+                </div>
+
+                {/* Enterprise Side */}
+                <div className="flex-1 p-8 md:p-16 border-b md:border-b-0 md:border-r border-white/10 flex flex-col justify-center relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-brandTeal/5 translate-y-full group-hover:translate-y-0 transition-transform duration-700 ease-in-out"></div>
+                    
+                    <div className="relative z-10 flex flex-col h-full justify-center">
+                        <div className="mb-6">
+                            <span className="inline-flex items-center gap-2 px-3 py-1 border border-brandTeal/30 bg-brandTeal/10 text-brandTeal font-mono text-[10px] tracking-wider uppercase">
+                                <span className="w-1.5 h-1.5 rounded-full bg-brandTeal"></span>
+                                Enterprise
+                            </span>
+                        </div>
+                        
+                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
+                            70% of every SAP / Salesforce rollout fails because people <span className="text-brandTeal">refuse to use it.</span>
+                        </h2>
+                        
+                        <p className="text-gray-400 text-lg leading-relaxed max-w-md mb-12">
+                            We fix that with a visible behavioral overlay that teaches mastery while users work.
+                        </p>
+
+                        <div>
+                            <button className="group flex items-center gap-3 px-6 py-3 border border-white/20 hover:border-brandTeal hover:bg-brandTeal/10 transition-all font-mono text-xs tracking-wider uppercase">
+                                Book a 30-min Diagnostic
+                                <span className="group-hover:translate-x-1 transition-transform">-></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Gig Side */}
+                <div className="flex-1 p-8 md:p-16 flex flex-col justify-center relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-brandPurple/5 translate-y-full group-hover:translate-y-0 transition-transform duration-700 ease-in-out"></div>
+                    
+                    <div className="relative z-10 flex flex-col h-full justify-center">
+                        <div className="mb-6">
+                            <span className="inline-flex items-center gap-2 px-3 py-1 border border-brandPurple/30 bg-brandPurple/10 text-brandPurple font-mono text-[10px] tracking-wider uppercase">
+                                <span className="w-1.5 h-1.5 rounded-full bg-brandPurple"></span>
+                                Gig Economy
+                            </span>
+                        </div>
+                        
+                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6">
+                            80 million freelancers use 8 tools and never learn how to <span className="text-brandPurple">run a real business.</span>
+                        </h2>
+                        
+                        <p className="text-gray-400 text-lg leading-relaxed max-w-md mb-12">
+                            We replace them all with one educational-first super-app that turns every action into deliberate skill progression.
+                        </p>
+
+                        <div>
+                            <button className="group flex items-center gap-3 px-6 py-3 border border-white/20 hover:border-brandPurple hover:bg-brandPurple/10 transition-all font-mono text-xs tracking-wider uppercase">
+                                Start Free Trial
+                                <span className="group-hover:translate-x-1 transition-transform">-></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const ScreenDiagnostic = () => (
+            <div className="p-8 md:p-12 max-w-6xl mx-auto h-full flex flex-col justify-center">
+                <SectionTitle number="01" title="The $38B Adoption Void" subtitle="QUANTIFICATION OF PAIN" color="text-alert" />
+                
+                <div className="grid md:grid-cols-2 gap-12 items-center mb-12">
+                    <div>
+                        <p className="text-xl leading-relaxed text-gray-300 mb-8">
+                            Companies spend billions on software licenses (Capital Deployed), but human utilization lags dangerously behind. The gap between <span className="text-white font-bold">Purchase</span> and <span className="text-white font-bold">Usage</span> is where ROI dies.
+                        </p>
+                        <div className="font-mono text-xs text-alert border border-alert/30 p-4 bg-alert/5 inline-block">
+                            WARNING: SYSTEM INEFFICIENCY DETECTED
+                        </div>
+                    </div>
+
+                    <div className="space-y-6 font-mono text-sm">
+                        <div>
+                            <div className="flex justify-between mb-2">
+                                <span>CAPITAL DEPLOYED (COST)</span>
+                                <span>100%</span>
+                            </div>
+                            <div className="h-4 bg-gray-800 w-full overflow-hidden">
+                                <motion.div 
+                                    initial={{ width: 0 }}
+                                    whileInView={{ width: "100%" }}
+                                    transition={{ duration: 1.5, ease: "circOut" }}
+                                    className="h-full bg-white"
+                                ></motion.div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div className="flex justify-between mb-2">
+                                <span>CONSULTING FEES (WASTE)</span>
+                                <span className="text-alert">$1-4M</span>
+                            </div>
+                            <div className="h-4 bg-gray-800 w-full overflow-hidden">
+                                <motion.div 
+                                    initial={{ width: 0 }}
+                                    whileInView={{ width: "60%" }}
+                                    transition={{ duration: 1.5, delay: 0.2, ease: "circOut" }}
+                                    className="h-full bg-alert pattern-diagonal-lines"
+                                ></motion.div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between mb-2">
+                                <span>HUMAN REALIZATION (VALUE)</span>
+                                <span className="text-brandTeal">&lt; 30%</span>
+                            </div>
+                            <div className="h-4 bg-gray-800 w-full overflow-hidden">
+                                <motion.div 
+                                    initial={{ width: 0 }}
+                                    whileInView={{ width: "28%" }}
+                                    transition={{ duration: 1.5, delay: 0.4, ease: "circOut" }}
+                                    className="h-full bg-brandTeal"
+                                ></motion.div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-start">
+                    <button className="px-8 py-4 border border-alert text-alert hover:bg-alert hover:text-black transition-all font-mono text-sm tracking-wider uppercase flex items-center gap-2 group">
+                        [ SCHEDULE AUDIT ]
+                        <span className="group-hover:translate-x-1 transition-transform">-></span>
+                    </button>
+                </div>
+            </div>
+        );
+
+        const ScreenDirective = () => (
+            <div className="p-8 md:p-12 h-full flex flex-col justify-center items-center text-center">
+                <SectionTitle number="02" title="The Paradigm Shift" subtitle="BEHAVIORAL DIRECTIVE" color="text-brandPurple" />
+                
+                <h3 className="text-2xl md:text-5xl font-light leading-tight max-w-4xl mx-auto mb-12">
+                    "Change Management is not an <span className="text-brandTeal font-bold">Education</span> problem.<br/> 
+                    It is a <span className="text-brandPurple font-bold">Behavioral Design</span> problem."
+                </h3>
+
+                <div className="flex flex-col md:flex-row gap-4 w-full max-w-md">
+                    <button className="flex-1 py-4 border border-brandTeal text-brandTeal hover:bg-brandTeal hover:text-black transition-colors font-mono text-sm">
+                        &gt; DEEP DIVE: ENTERPRISE
+                    </button>
+                    <button className="flex-1 py-4 border border-brandPurple text-brandPurple hover:bg-brandPurple hover:text-black transition-colors font-mono text-sm">
+                        &gt; DEEP DIVE: GIG ECON
+                    </button>
+                </div>
+            </div>
+        );
+
+        const ScreenEnterprise = () => (
+            <div className="p-8 md:p-12 h-full flex flex-col justify-center">
+                <SectionTitle number="03" title="The Overlay Layer" subtitle="B2B MARKET SOLUTION" color="text-brandTeal" />
+                
+                <div className="grid md:grid-cols-2 gap-8 mb-12">
+                    <Card>
+                        <h4 className="font-mono text-gray-500 mb-4 text-xs">LEGACY METHOD</h4>
+                        <div className="text-2xl font-bold mb-2">Army of Consultants</div>
+                        <ul className="space-y-2 text-gray-400 text-sm list-disc pl-4">
+                            <li>Expensive ($300/hr)</li>
+                            <li>Slow (18 month rollouts)</li>
+                            <li>High entropy (Information overload)</li>
+                        </ul>
+                    </Card>
+
+                    <Card className="border-brandTeal/50 bg-brandTeal/5">
+                        <h4 className="font-mono text-brandTeal mb-4 text-xs">REPLAY SOLUTION</h4>
+                        <div className="text-2xl font-bold mb-2 text-white">Behavioral Overlay</div>
+                        <ul className="space-y-2 text-gray-300 text-sm list-disc pl-4">
+                            <li>Automated Guidance</li>
+                            <li>Instant Contextual Learning</li>
+                            <li>Gameful Progression Systems</li>
+                        </ul>
+                    </Card>
+                </div>
+
+                <div className="flex items-center justify-between flex-wrap gap-8">
+                    <div className="flex flex-wrap gap-4 opacity-50">
+                        {['SALESFORCE', 'SAP', 'ORACLE', 'MICROSOFT DYNAMICS'].map(logo => (
+                            <span key={logo} className="px-4 py-2 border border-white/20 font-mono text-xs">{logo}</span>
+                        ))}
+                    </div>
+                    
+                    <button className="px-8 py-4 border border-brandTeal text-brandTeal hover:bg-brandTeal hover:text-black transition-all font-mono text-sm tracking-wider uppercase flex items-center gap-2 group">
+                        [ BOOK A DEMO ]
+                        <span className="group-hover:translate-x-1 transition-transform">-></span>
+                    </button>
+                </div>
+            </div>
+        );
+
+        const ScreenGig = () => (
+            <div className="p-8 md:p-12 h-full flex flex-col justify-center">
+                <SectionTitle number="04" title="Pocket Manager" subtitle="B2C SUPER-APP" color="text-brandPurple" />
+                
+                <div className="grid md:grid-cols-12 gap-8">
+                    <div className="md:col-span-7 space-y-8 flex flex-col justify-between">
+                        <div>
+                            <p className="text-lg text-gray-300 mb-8">
+                                Freelancers are drowning in tools. We replace the stack with a single, game-like interface that handles CRM, Invoicing, and Taxes.
+                            </p>
+                            
+                            <div className="grid grid-cols-3 gap-4 font-mono text-center">
+                                <div className="p-4 bg-white/5 border border-white/10">
+                                    <div className="text-2xl md:text-3xl font-bold text-brandPurple mb-1">8k</div>
+                                    <div className="text-xs text-gray-500">Active Users</div>
+                                </div>
+                                <div className="p-4 bg-white/5 border border-white/10">
+                                    <div className="text-2xl md:text-3xl font-bold text-brandPurple mb-1">$380k</div>
+                                    <div className="text-xs text-gray-500">ARR</div>
+                                </div>
+                                <div className="p-4 bg-white/5 border border-white/10">
+                                    <div className="text-2xl md:text-3xl font-bold text-brandPurple mb-1">61%</div>
+                                    <div className="text-xs text-gray-500">MoM Growth</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <button className="px-8 py-4 border border-brandPurple text-brandPurple hover:bg-brandPurple hover:text-black transition-all font-mono text-sm tracking-wider uppercase flex items-center gap-2 group">
+                                [ JOIN THE WAITLIST ]
+                                <span className="group-hover:translate-x-1 transition-transform">-></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="md:col-span-5 border border-dashed border-white/20 p-6 flex flex-col justify-between">
+                        <div className="font-mono text-xs text-gray-500 mb-4">// ROADMAP STATUS</div>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <span>SalesQuest v1</span>
+                                <span className="text-brandPurple text-xs">[ LIVE ]</span>
+                            </div>
+                            <div className="flex justify-between items-center opacity-50">
+                                <span>Pocket Accounting</span>
+                                <span className="text-xs">[ BETA ]</span>
+                            </div>
+                            <div className="flex justify-between items-center opacity-30">
+                                <span>Auto-Tax AI</span>
+                                <span className="text-xs">[ DEV ]</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const ScreenArchitecture = () => (
+            <div className="p-8 md:p-12 h-full flex flex-col justify-center">
+                <SectionTitle number="05" title="The Behavioral Engine" subtitle="TECHNICAL VALIDITY" color="text-white" />
+                
+                <div className="space-y-4 mb-12">
+                    {[
+                        { title: "Cognitive Ergonomics", desc: "Reducing cognitive load by hiding 90% of UI until contextually relevant.", color: "border-l-4 border-white" },
+                        { title: "Human Interface Layer", desc: "Zero-choice design patterns that funnel users into correct workflows.", color: "border-l-4 border-brandTeal" },
+                        { title: "Dopaminergic Attractors", desc: "Octalysis-based motivation loops (Scarcity, Accomplishment, Ownership).", color: "border-l-4 border-brandPurple" }
+                    ].map((item, i) => (
+                        <motion.div 
+                            key={i}
+                            whileHover={{ x: 10 }}
+                            className={`p-6 bg-white/5 ${item.color} backdrop-blur-md`}
+                        >
+                            <h3 className="text-xl font-bold mb-2">{item.title}</h3>
+                            <p className="text-sm text-gray-400 font-mono">{item.desc}</p>
+                        </motion.div>
+                    ))}
+                </div>
+                
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="font-mono text-xs text-gray-500">
+                        "THIS IS NOT GAMIFICATION. THIS IS GAMEFUL ARCHITECTURE."
+                    </div>
+                    <button className="px-8 py-4 border border-white text-white hover:bg-white hover:text-black transition-all font-mono text-sm tracking-wider uppercase flex items-center gap-2 group">
+                        [ READ THE WHITEPAPER ]
+                        <span className="group-hover:translate-x-1 transition-transform">-></span>
+                    </button>
+                </div>
+            </div>
+        );
+
+        const ScreenTraction = () => (
+            <div className="p-8 md:p-12 h-full flex flex-col justify-center">
+                <SectionTitle number="06" title="Validation" subtitle="MARKET PROOF" color="text-green-400" />
+                
+                <div className="grid md:grid-cols-2 gap-8 h-full md:h-2/3 mb-8">
+                    <div className="relative border border-brandTeal/30 bg-gradient-to-br from-brandTeal/10 to-transparent p-8 flex flex-col justify-end group overflow-hidden">
+                        <div className="absolute top-4 right-4 font-mono text-xs text-brandTeal border border-brandTeal px-2 py-1">ENTERPRISE</div>
+                        <div className="text-6xl font-bold text-white mb-2">3</div>
+                        <div className="text-xl text-brandTeal mb-4">Fortune 1000 Pilots</div>
+                        <p className="text-sm text-gray-400">Signed contracts with major logistics and manufacturing firms.</p>
+                    </div>
+
+                    <div className="relative border border-brandPurple/30 bg-gradient-to-br from-brandPurple/10 to-transparent p-8 flex flex-col justify-end group overflow-hidden">
+                        <div className="absolute top-4 right-4 font-mono text-xs text-brandPurple border border-brandPurple px-2 py-1">GIG ECON</div>
+                        <div className="text-6xl font-bold text-white mb-2">4.9<span className="text-2xl text-gray-500">/5</span></div>
+                        <div className="text-xl text-brandPurple mb-4">App Store Rating</div>
+                        <p className="text-sm text-gray-400">Consistent organic growth driven by "cult-like" user base.</p>
+                    </div>
+                </div>
+
+                <div className="flex justify-end">
+                    <button className="px-8 py-4 border border-green-400 text-green-400 hover:bg-green-400 hover:text-black transition-all font-mono text-sm tracking-wider uppercase flex items-center gap-2 group">
+                        [ BECOME A PILOT PARTNER ]
+                        <span className="group-hover:translate-x-1 transition-transform">-></span>
+                    </button>
+                </div>
+            </div>
+        );
+
+        const ScreenTeam = () => (
+            <div className="p-8 md:p-12 h-full flex flex-col justify-center">
+                <SectionTitle number="07" title="The Architects" subtitle="FOUNDING TEAM" color="text-white" />
+                
+                <div className="grid md:grid-cols-2 gap-12 mb-12">
+                    <div className="flex items-start gap-6">
+                        <div className="w-24 h-24 shrink-0 bg-blue-900 overflow-hidden border border-blue-500/50 grayscale contrast-125">
+                            <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=Eduardo&backgroundColor=0f172a" alt="Eduardo" className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Eduardo T. Elizondo</h3>
+                            <div className="font-mono text-xs text-brandTeal mb-3">SYSTEMS ARCHITECT</div>
+                            <p className="text-sm text-gray-400">Former Accenture Strategy. Expert in enterprise entropy reduction and complex systems theory.</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-start gap-6">
+                        <div className="w-24 h-24 shrink-0 bg-purple-900 overflow-hidden border border-purple-500/50 grayscale contrast-125">
+                            <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=Alejandro&backgroundColor=3b0764" alt="Alejandro" className="w-full h-full object-cover" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Alejandro Paez</h3>
+                            <div className="font-mono text-xs text-brandPurple mb-3">MANAGING PARTNER</div>
+                            <p className="text-sm text-gray-400">Serial Entrepreneur. Built and exited two SaaS platforms in the Gig Economy space.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex flex-col md:flex-row gap-6">
+                    <button className="flex-1 px-8 py-4 border border-white text-white hover:bg-white hover:text-black transition-all font-mono text-sm tracking-wider uppercase flex items-center justify-center gap-2 group">
+                        [ CONTACT FOUNDERS ]
+                        <span className="group-hover:translate-x-1 transition-transform">-></span>
+                    </button>
+                    <button className="flex-1 px-8 py-4 border border-gray-600 text-gray-400 hover:border-white hover:text-white transition-all font-mono text-sm tracking-wider uppercase flex items-center justify-center gap-2 group">
+                        [ WANT TO JOIN? ]
+                        <span className="group-hover:translate-x-1 transition-transform">-></span>
+                    </button>
+                </div>
+            </div>
+        );
+
+        // --- Main App Logic ---
+
+        const App = () => {
+            const [hasEntered, setHasEntered] = useState(false);
+            const [activeSection, setActiveSection] = useState('00_HOME');
+            const [isMobile, setIsMobile] = useState(false);
+            const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+            // Handle resize for Responsive Logic
+            useEffect(() => {
+                const handleResize = () => setIsMobile(window.innerWidth < 768);
+                handleResize(); // Init
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
+
+            // Mobile Scroll Listener to update Active State
+            useEffect(() => {
+                if (!isMobile || !hasEntered) return;
+                
+                const handleScroll = () => {
+                    const sections = SECTIONS.map(s => document.getElementById(s.id));
+                    const scrollPosition = window.scrollY + window.innerHeight / 3;
+
+                    sections.forEach(section => {
+                        if (section && section.offsetTop <= scrollPosition && (section.offsetTop + section.offsetHeight) > scrollPosition) {
+                            setActiveSection(section.id);
+                        }
+                    });
+                };
+
+                window.addEventListener('scroll', handleScroll);
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, [isMobile, hasEntered]);
+
+            const renderSectionContent = (id) => {
+                switch(id) {
+                    case '00_MTP': return <ScreenHome />; // MTP is an overlay, rendering Home under it logically if navigated to
+                    case '00_HOME': return <ScreenHome />;
+                    case '01_DIAGNOSTIC': return <ScreenDiagnostic />;
+                    case '02_DIRECTIVE': return <ScreenDirective />;
+                    case '03_ENTERPRISE': return <ScreenEnterprise />;
+                    case '04_GIG_ECONOMY': return <ScreenGig />; // Mapped to correct ID
+                    case '04_GIG': return <ScreenGig />; // Fallback
+                    case '05_ARCHITECTURE': return <ScreenArchitecture />;
+                    case '05_ARCH': return <ScreenArchitecture />; // Fallback
+                    case '06_TRACTION': return <ScreenTraction />;
+                    case '07_TEAM': return <ScreenTeam />;
+                    default: return <ScreenHome />;
+                }
+            };
+
+            const scrollToSection = (id) => {
+                // Special handling for MTP
+                if (id === '00_MTP') {
+                    setHasEntered(false);
+                    return;
+                }
+
+                if (isMobile) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.scrollIntoView({ behavior: 'smooth' });
+                        setMobileMenuOpen(false);
+                    }
+                } else {
+                    setActiveSection(id);
+                }
+            };
+
+            return (
+                <div className="min-h-screen text-gray-200 font-sans selection:bg-brandTeal selection:text-black">
+                    <div className="noise-overlay"></div>
+                    
+                    <AnimatePresence>
+                        {!hasEntered && <ScreenMTP onEnter={() => setHasEntered(true)} />}
+                    </AnimatePresence>
+
+                    {hasEntered && (
+                        <div className="flex h-screen overflow-hidden relative">
+                            
+                            {/* Desktop Sidebar (Navigation Matrix) */}
+                            {!isMobile && (
+                                <aside className="w-80 bg-panel border-l border-white/10 flex flex-col z-20 absolute right-0 top-0 bottom-0 shadow-2xl">
+                                    <div className="p-8 border-b border-white/10">
+                                        <div className="text-xs font-mono text-gray-500 tracking-widest uppercase">// NAVIGATION_MATRIX</div>
+                                    </div>
+                                    
+                                    <nav className="flex-1 overflow-y-auto py-4">
+                                        {SECTIONS.map((section) => (
+                                            <button
+                                                key={section.id}
+                                                onClick={() => scrollToSection(section.id)}
+                                                className={`w-full text-left px-8 py-4 font-mono text-xs transition-all duration-300 flex items-center gap-3 group hover:bg-white/5
+                                                    ${activeSection === section.id ? 'text-brandTeal border-l-2 border-brandTeal bg-white/5' : 'text-gray-500 border-l-2 border-transparent'}
+                                                `}
+                                            >
+                                                <Icon name={section.icon} className={`w-4 h-4 transition-colors ${activeSection === section.id ? 'text-brandTeal' : 'text-gray-600 group-hover:text-gray-400'}`} />
+                                                <span className="uppercase tracking-wide">{section.label}</span>
+                                                {activeSection === section.id && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-brandTeal animate-pulse"></div>}
+                                            </button>
+                                        ))}
+                                    </nav>
+
+                                    <div className="p-8 border-t border-white/10 font-mono text-[10px] space-y-2 text-gray-600">
+                                        <div className="flex items-center gap-2 text-green-500 mb-4">
+                                            <span className="w-2 h-2 rounded-full bg-current animate-pulse"></span>
+                                            SYSTEM ONLINE
+                                        </div>
+                                        <div>REPLAY LABS</div>
+                                        <div>BUILD: v3.2.0</div>
+                                        <div>LATAM SERVER</div>
+                                    </div>
+                                </aside>
+                            )}
+
+                            {/* Mobile Header */}
+                            {isMobile && (
+                                <header className="fixed top-0 left-0 right-0 h-16 bg-panel/90 backdrop-blur border-b border-white/10 z-40 flex items-center justify-between px-6">
+                                    <h1 className="font-bold text-lg tracking-tighter">REPLAY<span className="text-brandTeal">LABS</span></h1>
+                                    <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+                                        <Icon name={mobileMenuOpen ? 'x' : 'menu'} />
+                                    </button>
+                                </header>
+                            )}
+
+                            {/* Mobile Menu Overlay */}
+                            <AnimatePresence>
+                                {isMobile && mobileMenuOpen && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: -20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -20 }}
+                                        className="fixed inset-0 top-16 bg-void z-30 p-6 overflow-y-auto"
+                                    >
+                                        <div className="space-y-4">
+                                            {SECTIONS.map((section) => (
+                                                <button
+                                                    key={section.id}
+                                                    onClick={() => scrollToSection(section.id)}
+                                                    className="block w-full text-left text-2xl font-bold py-4 border-b border-white/10"
+                                                >
+                                                    <span className="text-brandTeal text-sm font-mono block mb-1">/{section.id.split('_')[1]}</span>
+                                                    {section.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            {/* Main Content Area */}
+                            <main className={`flex-1 bg-void relative z-10 
+                                ${isMobile ? 'overflow-y-auto pt-16 scroll-smooth' : 'mr-80 overflow-y-auto custom-scrollbar'}
+                            `}>
+                                <div className="grid-bg min-h-full">
+                                    {isMobile ? (
+                                        // Mobile: Stacked Vertical Layout
+                                        <div className="pb-24">
+                                            {SECTIONS.map(section => (
+                                                <section key={section.id} id={section.id} className="min-h-screen border-b border-white/5 relative">
+                                                    {renderSectionContent(section.id)}
+                                                </section>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        // Desktop: Dynamic Component Switching (SPA feel)
+                                        <motion.div
+                                            key={activeSection}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ duration: 0.3 }}
+                                            className="h-full w-full"
+                                        >
+                                            {renderSectionContent(activeSection)}
+                                        </motion.div>
+                                    )}
+                                </div>
+                            </main>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
